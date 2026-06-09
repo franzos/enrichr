@@ -60,22 +60,49 @@ The `visitor_id` field on `RawEvent` is an escape hatch: if you set it yourself,
 
 ## Features
 
-| Feature | What it adds | Default |
-|---|---|---|
-| `serde` | `Serialize`/`Deserialize` for `Event`, `EventKind`, value types | yes |
-| `blake3` | `Blake3Hasher` | yes |
-| `useragent` | `UaParserBuiltin` (bundled regexes via `ua-parser`) | yes |
-| `referrer-list` | `ReferrerListClassifier` + `referrer::extract_utm` | yes |
-| `sha256` | `Sha256Hasher` | no |
-| `geoip` | `GeoIpDb` (MaxMind city database reader) | no |
-| `http-headers` | `headers::client_ip` helper | no |
-| `utoipa` | `utoipa::ToSchema` on output types | no |
-| `typeshare` | `#[typeshare]` on output types | no |
-| `schemars` | `JsonSchema` on output types | no |
+Everything beyond the core pipeline (`Processor`, `RawEvent`/`Event`, the `Hasher`/`SaltProvider`/`VisitorIdStrategy`/`UaParser`/`Classifier` traits, `mask_ip`) is feature-gated, so you only pull the dependencies you use.
 
-`default = ["serde", "blake3", "useragent", "referrer-list"]`
+`default = ["serde", "blake3", "useragent", "referrer-list"]` — the batteries-included set: it hashes visitor ids, parses user agents, classifies referrers, and (de)serializes the output. `full` turns on everything.
 
-`full` enables everything.
+### Hashing
+
+| Feature | Adds | Pulls | Default |
+|---|---|---|---|
+| `blake3` | `Blake3Hasher` (32-byte BLAKE3 digest) — fast, recommended | `blake3` | yes |
+| `sha256` | `Sha256Hasher` (32-byte SHA-256) — standardized, pick it if an audit/compliance regime expects SHA-2 | `sha2` | no |
+
+The built-in `SaltedHasher` / `MaskedHashedStrategy` are generic over `Hasher`, so **you need at least one of these two features** to use them out of the box — or implement `Hasher` (or the whole `VisitorIdStrategy`) yourself. The choice between BLAKE3 and SHA-256 is performance/standardization; neither protects users without a secret salt (see [Privacy](#privacy)).
+
+### Enrichment
+
+| Feature | Adds | Pulls | Default |
+|---|---|---|---|
+| `useragent` | `UaParserBuiltin` — device/browser/OS + `is_bot`, via `ua-parser` with a regex DB embedded at compile time (one parse per event) | `ua-parser`, `serde_yaml` | yes |
+| `referrer-list` | `ReferrerListClassifier` (built-in domain→category/source table) and the `referrer` utils: `registrable_domain` (eTLD+1 via the Public Suffix List), `strip_referrer`, `extract_utm` | `psl`, `url` | yes |
+| `geoip` | `GeoIpDb` — hot-reloadable MaxMind `.mmdb` city reader (see [GeoIP](#geoip)); `lookup` returns a `Location` | `maxminddb` | no |
+
+**Caveat for `referrer-list`:** `Event.referrer` (the eTLD+1) is computed by `registrable_domain`, which lives behind this feature. With the feature **off**, `Event.referrer` and `Event.traffic_source` are always `None` regardless of the incoming referrer — the pipeline simply doesn't parse it. `keep_raw_referrer(true)` still preserves the full URL in `Event.raw_referrer` either way.
+
+### Serialization & codegen
+
+These are additive derives on the public output types (`Event`, `Location`, `Context`, `Utm`, `DeviceInfo`, `BrowserInfo`, `OperatingSystemInfo`, `ParsedUa`, `TrafficSource`, plus `EventKind`/`VisitorId`). `RawEvent` is deliberately **never** `Serialize` — it carries the raw IP/UA/referrer.
+
+| Feature | Adds | Pulls | Default |
+|---|---|---|---|
+| `serde` | `Serialize`/`Deserialize`; also enables `chrono/serde` for the timestamp. `EventKind`/`VisitorId` deserialize through their validating constructors | `serde` | yes |
+| `utoipa` | `utoipa::ToSchema` (OpenAPI); `EventKind`/`VisitorId` render as `string` | `utoipa` | no |
+| `schemars` | `schemars::JsonSchema` | `schemars` | no |
+| `typeshare` | `#[typeshare]` annotations for TypeScript type generation | `typeshare` | no |
+
+### Helpers
+
+| Feature | Adds | Pulls | Default |
+|---|---|---|---|
+| `http-headers` | `headers::client_ip(getter)` — framework-agnostic client-IP extraction from forwarding headers (`X-Forwarded-For`, `CF-Connecting-IP`, …). You supply proxy trust | — (std only) | no |
+
+### No-default build
+
+With `default-features = false` and nothing else, `enrichr` is a near-identity pipeline: it validates and passes fields through but does no hashing, UA parsing, referrer classification, or geo lookup. It's only useful in that mode if you wire in your own `VisitorIdStrategy` / `Classifier` / `UaParser` implementations.
 
 ## GeoIP
 
