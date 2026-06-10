@@ -20,6 +20,13 @@ pub struct GeoIpDb {
 const SIZE_FLOOR_RATIO: usize = 80;
 
 impl GeoIpDb {
+    // nothing loaded until a successful reload; lookup returns None until then
+    pub fn empty() -> Self {
+        GeoIpDb {
+            inner: ArcSwapOption::empty(),
+        }
+    }
+
     pub fn from_path(p: &Path) -> Result<Self, GeoIpError> {
         let bytes = std::fs::read(p)?;
         let loaded = Self::build(bytes)?;
@@ -96,6 +103,17 @@ mod tests {
         let db = GeoIpDb::from_path("tests/fixtures/city.mmdb".as_ref()).unwrap();
         // fixture-dependent: just assert it does not panic and returns a value (Some or None)
         let _ = db.lookup("89.160.20.112".parse::<IpAddr>().unwrap());
+    }
+
+    #[test]
+    fn empty_then_reload() {
+        let db = GeoIpDb::empty();
+        assert!(db
+            .lookup("89.160.20.112".parse::<IpAddr>().unwrap())
+            .is_none());
+        assert!(db
+            .reload_from_path("tests/fixtures/city.mmdb".as_ref())
+            .is_ok());
     }
 
     #[test]

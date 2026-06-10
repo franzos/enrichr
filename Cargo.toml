@@ -1,6 +1,6 @@
 [package]
 name = "enrichr"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Franz Geffke <mail@gofranz.com>"]
 description = "Database-independent, privacy-friendly analytics event enrichment (visitor id, GeoIP, device, traffic source)"

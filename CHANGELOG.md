@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.2] - 2026-06-10
+
+### Added
+- `GeoIpDb::empty()` constructor for deferred loading
+
 ## [0.1.1] - 2026-06-10
 
 ### Added
