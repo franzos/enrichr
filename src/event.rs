@@ -42,17 +42,25 @@ impl EventKind {
             "view" => return Ok(EventKind::View),
             _ => {}
         }
-        let ok =
-            !s.is_empty() && s.len() <= MAX_CUSTOM && s.bytes().all(|b| (0x20..=0x7E).contains(&b));
-        if ok {
-            Ok(EventKind::Custom(s))
-        } else {
-            Err(ProcessError::InvalidInput {
-                field: Field::EventKindCustom,
-                limit: MAX_CUSTOM,
-            })
-        }
+        validate_custom_kind(&s)?;
+        Ok(EventKind::Custom(s))
     }
+}
+
+/// Shared rules for a Custom event-kind string: 1..=64 printable ASCII bytes.
+pub(crate) fn validate_custom_kind(s: &str) -> Result<(), ProcessError> {
+    if s.is_empty() || !s.bytes().all(|b| (0x20..=0x7E).contains(&b)) {
+        return Err(ProcessError::InvalidFormat {
+            field: Field::EventKindCustom,
+        });
+    }
+    if s.len() > MAX_CUSTOM {
+        return Err(ProcessError::InvalidInput {
+            field: Field::EventKindCustom,
+            limit: MAX_CUSTOM,
+        });
+    }
+    Ok(())
 }
 
 impl From<EventKind> for String {

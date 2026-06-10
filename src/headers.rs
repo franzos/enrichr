@@ -9,7 +9,12 @@ const ORDER: &[&str] = &[
 ];
 
 /// Extract a client IP from headers via a caller-supplied getter.
-/// For `x-forwarded-for`, takes the first entry. No proxy-trust logic (caller's responsibility).
+///
+/// For `x-forwarded-for`, takes the leftmost entry. That entry is
+/// CLIENT-CONTROLLED and trivially spoofable: trust it ONLY when this code runs
+/// behind a known trusted proxy that overwrites/appends the header, and account
+/// for the correct hop count. This function does NO proxy-trust validation — that
+/// is the caller's responsibility.
 pub fn client_ip<'a, F>(get: F) -> Option<IpAddr>
 where
     F: Fn(&str) -> Option<&'a str>,

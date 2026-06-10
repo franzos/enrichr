@@ -1,7 +1,7 @@
 #[cfg(feature = "referrer-list")]
 use crate::classify::{Classifier, ClassifyCtx};
 use crate::error::{Field, ProcessError};
-use crate::event::{Event, RawEvent};
+use crate::event::{validate_custom_kind, Event, EventKind, RawEvent};
 #[cfg(feature = "geoip")]
 use crate::geoip::GeoIpDb;
 use crate::strategy::VisitorIdStrategy;
@@ -11,6 +11,7 @@ use crate::useragent::UaParser;
 const MAX_URL: usize = 2048;
 const MAX_ID: usize = 128;
 const MAX_UTM: usize = 256;
+const MAX_UA: usize = 4096;
 
 #[derive(Default)]
 pub struct ProcessorBuilder {
@@ -25,29 +26,34 @@ pub struct ProcessorBuilder {
 }
 
 impl ProcessorBuilder {
+    #[must_use]
     pub fn visitor_id_strategy(mut self, s: impl VisitorIdStrategy + 'static) -> Self {
         self.visitor_id = Some(Box::new(s));
         self
     }
 
+    #[must_use]
     pub fn keep_raw_referrer(mut self, yes: bool) -> Self {
         self.keep_raw_referrer = yes;
         self
     }
 
     #[cfg(feature = "geoip")]
+    #[must_use]
     pub fn geoip(mut self, db: GeoIpDb) -> Self {
         self.geoip = Some(db);
         self
     }
 
     #[cfg(feature = "useragent")]
+    #[must_use]
     pub fn ua_parser(mut self, p: impl UaParser + 'static) -> Self {
         self.ua = Some(Box::new(p));
         self
     }
 
     #[cfg(feature = "referrer-list")]
+    #[must_use]
     pub fn classifier(mut self, c: impl Classifier + 'static) -> Self {
         self.classifier = Some(Box::new(c));
         self
@@ -209,9 +215,15 @@ fn check(s: &str, field: Field, limit: usize) -> Result<(), ProcessError> {
 }
 
 fn validate(raw: &RawEvent) -> Result<(), ProcessError> {
+    if let EventKind::Custom(s) = &raw.kind {
+        validate_custom_kind(s)?;
+    }
     check(&raw.page_url, Field::PageUrl, MAX_URL)?;
     if let Some(r) = &raw.referrer {
         check(r, Field::Referrer, MAX_URL)?;
+    }
+    if let Some(ua) = &raw.user_agent {
+        check(ua, Field::UserAgent, MAX_UA)?;
     }
     if let Some(e) = &raw.entity_id {
         check(e, Field::EntityId, MAX_ID)?;

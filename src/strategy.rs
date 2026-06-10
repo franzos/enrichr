@@ -1,18 +1,29 @@
 use crate::event::RawEvent;
-use crate::hash::{base62_16, frame, Hasher, SaltProvider};
+use crate::hash::{base62, frame, Hasher, SaltProvider};
 use crate::ip::{mask_ip, IpMaskMode};
 use crate::visitor::VisitorId;
 use std::net::IpAddr;
 
 /// Computes the visitor id for an event. Sees the whole RawEvent.
+///
+/// The generated ID incorporates the user-agent, so it CHANGES whenever the
+/// visitor's UA changes (e.g. a browser update). It is stable per
+/// `(masked-IP, user-agent, salt)` tuple, not per-person. A pre-set
+/// [`RawEvent::visitor_id`] is trusted and passed through VERBATIM (never hashed).
 pub trait VisitorIdStrategy: Send + Sync {
     fn visitor_id(&self, raw: &RawEvent) -> Option<VisitorId>;
 }
 
-fn ip_octets(ip: IpAddr) -> Vec<u8> {
+fn ip_octets(ip: IpAddr, buf: &mut [u8; 16]) -> usize {
     match ip {
-        IpAddr::V4(a) => a.octets().to_vec(),
-        IpAddr::V6(a) => a.octets().to_vec(),
+        IpAddr::V4(a) => {
+            buf[..4].copy_from_slice(&a.octets());
+            4
+        }
+        IpAddr::V6(a) => {
+            buf.copy_from_slice(&a.octets());
+            16
+        }
     }
 }
 
@@ -24,12 +35,14 @@ fn compute<H: Hasher, S: SaltProvider>(
 ) -> Option<VisitorId> {
     let ip = raw.ip?;
     let ip = mask_ip(ip, mask);
-    let octets = ip_octets(ip);
+    let mut buf = [0u8; 16];
+    let n = ip_octets(ip, &mut buf);
+    let octets = &buf[..n];
     let salt = s.current_salt();
     let entity = raw.entity_id.as_deref().unwrap_or("").as_bytes();
     let ua = raw.user_agent.as_deref().unwrap_or("").as_bytes();
-    let framed = frame(&[entity, &octets, ua, &salt]);
-    Some(VisitorId::new_unchecked(base62_16(&h.hash(&framed))))
+    let framed = frame(&[entity, octets, ua, &salt]);
+    Some(VisitorId::new_unchecked(base62(&h.hash(&framed))))
 }
 
 /// Full-precision: hashes the exact IP.
@@ -55,6 +68,9 @@ pub struct MaskedHashedStrategy<H: Hasher, S: SaltProvider> {
     mask: IpMaskMode,
 }
 impl<H: Hasher, S: SaltProvider> MaskedHashedStrategy<H, S> {
+    /// Note: `IpMaskMode::None` and `IpMaskMode::Full` perform NO masking — the
+    /// full-precision IP enters the hash. Pass `Balanced` or `Accurate` for actual
+    /// IP coarsening; the other two are a privacy footgun if chosen by accident.
     pub fn new(hasher: H, salt: S, mask: IpMaskMode) -> Self {
         MaskedHashedStrategy { hasher, salt, mask }
     }

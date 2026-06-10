@@ -2,6 +2,7 @@ use thiserror::Error;
 
 /// Identifies which input field violated a constraint. Carries no field *value* (PII-safe).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Field {
     PageUrl,
     Referrer,
@@ -14,6 +15,7 @@ pub enum Field {
     UtmContent,
     UtmTerm,
     VisitorId,
+    UserAgent,
 }
 
 impl Field {
@@ -30,21 +32,26 @@ impl Field {
             Field::UtmContent => "utm_content",
             Field::UtmTerm => "utm_term",
             Field::VisitorId => "visitor_id",
+            Field::UserAgent => "user_agent",
         }
     }
 }
 
-/// Returned by `Processor::process`. The only failure mode is invalid input (bounds).
+/// Returned by `Processor::process`. The only failure mode is invalid input.
 /// Error messages never include the offending value (it may be PII).
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
+#[non_exhaustive]
 pub enum ProcessError {
     #[error("{} exceeds maximum length of {limit} bytes", field.as_str())]
     InvalidInput { field: Field, limit: usize },
+    #[error("{} has invalid format", field.as_str())]
+    InvalidFormat { field: Field },
 }
 
 /// Errors from loading / reloading a GeoIP database.
 #[derive(Debug, Error)]
 #[cfg(feature = "geoip")]
+#[non_exhaustive]
 pub enum GeoIpError {
     #[error("failed to read geoip database: {0}")]
     Io(#[from] std::io::Error),

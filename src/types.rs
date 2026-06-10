@@ -41,6 +41,7 @@ data_struct! { pub struct DeviceInfo {
     pub family: String,
     pub brand: Option<String>,
     pub model: Option<String>,
+    /// Derived best-effort bucket: bot/mobile/tablet/desktop (or None).
     pub device_type: Option<String>,
 }}
 
@@ -62,11 +63,13 @@ data_struct! { pub struct TrafficSource {
     pub medium: Option<String>,
 }}
 
-/// Parsed user agent. `is_bot` is library-derived (see useragent.rs).
+/// Parsed user agent. `is_bot` is library-derived (see useragent.rs): best-effort and
+/// UA-string-only, so it won't catch bots that spoof a real browser UA.
 #[derive(Debug, Clone, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "typeshare", typeshare::typeshare)]
 pub struct ParsedUa {
     pub device: DeviceInfo,
     pub browser: BrowserInfo,

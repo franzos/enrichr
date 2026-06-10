@@ -20,8 +20,12 @@ pub mod referrer;
 #[cfg(feature = "useragent")]
 pub mod useragent;
 
+#[cfg(feature = "geoip")]
+pub use error::GeoIpError;
 pub use error::{Field, ProcessError};
 pub use event::{Event, EventKind, RawEvent};
+#[cfg(feature = "geoip")]
+pub use geoip::GeoIpDb;
 pub use hash::{ArcSwapSalt, Hasher, SaltProvider, StaticSalt};
 pub use ip::{mask_ip, IpMaskMode};
 pub use processor::{Processor, ProcessorBuilder};

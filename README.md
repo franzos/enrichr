@@ -49,10 +49,10 @@ raw.user_agent = Some("Mozilla/5.0 (Macintosh; ...)".into());
 raw.referrer = Some("https://www.google.com/".into());
 
 let event = processor.process(raw)?;
-// event.visitor_id  — base62, 16 chars, stable per (masked-ip, ua, entity)
+// event.visitor_id  — base62 of the full digest (~43 chars), stable per (masked-ip, ua, entity)
 // event.referrer    — eTLD+1 ("google.com"), or None
-// event.traffic_source — category + source_name
-// event.device / .browser / .os / .bot
+// event.traffic_source — category + source_name + medium (organic/social/referral/cpc)
+// event.device / .browser / .os / .bot   — device.device_type: mobile/tablet/desktop/bot
 // event.location    — None unless geoip feature + GeoIpDb configured
 ```
 
@@ -77,8 +77,8 @@ The built-in `SaltedHasher` / `MaskedHashedStrategy` are generic over `Hasher`, 
 
 | Feature | Adds | Pulls | Default |
 |---|---|---|---|
-| `useragent` | `UaParserBuiltin` — device/browser/OS + `is_bot`, via `ua-parser` with a regex DB embedded at compile time (one parse per event) | `ua-parser`, `serde_yaml` | yes |
-| `referrer-list` | `ReferrerListClassifier` (built-in domain→category/source table) and the `referrer` utils: `registrable_domain` (eTLD+1 via the Public Suffix List), `strip_referrer`, `extract_utm` | `psl`, `url` | yes |
+| `useragent` | `UaParserBuiltin` — device/browser/OS, a `device_type` bucket (mobile/tablet/desktop/bot), and a best-effort `is_bot` (uap-core spiders + self-identifying agents like GPTBot/curl), via `ua-parser` with a regex DB embedded at compile time (one parse per event) | `ua-parser`, `yaml_serde` | yes |
+| `referrer-list` | `ReferrerListClassifier` (built-in domain→category/source table; derives `medium`, and detects paid clicks via `gclid`/`msclkid`) and the `referrer` utils: `registrable_domain` (eTLD+1 via the Public Suffix List), `extract_utm`, and `paid_click` | `psl`, `url` | yes |
 | `geoip` | `GeoIpDb` — hot-reloadable MaxMind `.mmdb` city reader (see [GeoIP](#geoip)); `lookup` returns a `Location` | `maxminddb` | no |
 
 **Caveat for `referrer-list`:** `Event.referrer` (the eTLD+1) is computed by `registrable_domain`, which lives behind this feature. With the feature **off**, `Event.referrer` and `Event.traffic_source` are always `None` regardless of the incoming referrer — the pipeline simply doesn't parse it. `keep_raw_referrer(true)` still preserves the full URL in `Event.raw_referrer` either way.

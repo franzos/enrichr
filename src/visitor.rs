@@ -8,19 +8,24 @@ pub struct VisitorId(String);
 
 impl VisitorId {
     /// Validates: non-empty, ≤128 bytes, printable non-whitespace ASCII.
+    ///
+    /// Does NOT hash. It accepts any printable ASCII up to the limit, so callers
+    /// MUST pass an already-opaque/hashed value — never raw PII such as an IP or
+    /// email address.
     pub fn new(s: impl Into<String>) -> Result<Self, crate::error::ProcessError> {
         let s = s.into();
-        let ok = !s.is_empty()
-            && s.len() <= MAX_VISITOR_ID
-            && s.bytes().all(|b| (0x21..=0x7E).contains(&b));
-        if ok {
-            Ok(VisitorId(s))
-        } else {
-            Err(crate::error::ProcessError::InvalidInput {
+        if s.is_empty() || !s.bytes().all(|b| (0x21..=0x7E).contains(&b)) {
+            return Err(crate::error::ProcessError::InvalidFormat {
+                field: Field::VisitorId,
+            });
+        }
+        if s.len() > MAX_VISITOR_ID {
+            return Err(crate::error::ProcessError::InvalidInput {
                 field: Field::VisitorId,
                 limit: MAX_VISITOR_ID,
-            })
+            });
         }
+        Ok(VisitorId(s))
     }
 
     /// Construct without validation. For internal generation where the value is known-valid.

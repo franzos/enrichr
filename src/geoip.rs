@@ -38,7 +38,9 @@ impl GeoIpDb {
             if candidate.build_epoch < cur.build_epoch {
                 return Err(GeoIpError::Rejected("build_epoch older than current"));
             }
-            if candidate.len * 100 < cur.len * SIZE_FLOOR_RATIO {
+            let cand = (candidate.len as u64).saturating_mul(100);
+            let floor = (cur.len as u64).saturating_mul(SIZE_FLOOR_RATIO as u64);
+            if cand < floor {
                 return Err(GeoIpError::Rejected("candidate too small vs current"));
             }
         }

@@ -4,12 +4,15 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum IpMaskMode {
+    /// No masking. Produces identical output to [`IpMaskMode::Full`]
+    /// (both full-precision); the distinction is intent-only.
     None,
     /// /24, /56
     Balanced,
     /// /28, /64
     Accurate,
-    /// /32, /128 (no masking, but normalizes IPv4-mapped)
+    /// /32, /128 (no masking, but normalizes IPv4-mapped). Identical output to
+    /// [`IpMaskMode::None`].
     Full,
 }
 

@@ -14,22 +14,6 @@ pub fn registrable_domain(input: &str) -> Option<String> {
     psl::domain_str(&host).map(|d| d.to_string())
 }
 
-/// Best-effort host (FQDN, www. stripped) for display — same parsing rules.
-pub fn strip_referrer(input: &str) -> Option<String> {
-    let url = Url::parse(input).ok()?;
-    if !matches!(url.scheme(), "http" | "https") {
-        return None;
-    }
-    match url.host()? {
-        Host::Domain(d) => Some(
-            d.trim_end_matches('.')
-                .trim_start_matches("www.")
-                .to_ascii_lowercase(),
-        ),
-        Host::Ipv4(_) | Host::Ipv6(_) => None,
-    }
-}
-
 /// Parse UTM params (with common aliases) from a URL's query.
 pub fn extract_utm(input: &str) -> Utm {
     let mut u = Utm::default();
@@ -57,6 +41,20 @@ pub fn extract_utm(input: &str) -> Utm {
         }
     }
     u
+}
+
+/// Reliable paid-click signal from a URL's query: (source_name, medium). None if absent.
+/// gclid/gbraid/wbraid => Google Ads, msclkid => Microsoft Ads. fbclid/ttclid are NOT paid signals.
+pub fn paid_click(input: &str) -> Option<(&'static str, &'static str)> {
+    let url = Url::parse(input).ok()?;
+    for (k, _) in url.query_pairs() {
+        match k.as_ref() {
+            "gclid" | "gbraid" | "wbraid" => return Some(("google", "cpc")),
+            "msclkid" => return Some(("bing", "cpc")),
+            _ => {}
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -103,5 +101,13 @@ mod tests {
         let u = extract_utm("https://x/?utm_source=google&utm_medium=cpc");
         assert_eq!(u.source.as_deref(), Some("google"));
         assert_eq!(u.medium.as_deref(), Some("cpc"));
+    }
+
+    #[test]
+    fn paid_click_signals() {
+        assert_eq!(paid_click("https://x/?gclid=abc"), Some(("google", "cpc")));
+        assert_eq!(paid_click("https://x/?msclkid=abc"), Some(("bing", "cpc")));
+        assert_eq!(paid_click("https://x/?fbclid=xyz"), None);
+        assert_eq!(paid_click("https://x/?foo=bar"), None);
     }
 }
